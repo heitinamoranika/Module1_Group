@@ -30,10 +30,15 @@ y_t2=testdata$y_t2
 y_t3=testdata$y_t3
 
 
-
 t=testdata$t
 y_t=y_t1
 
+
+
+#Any clean part of function must pass the following example:
+#y_t=c('1',1,'-1',-1,Inf,'Inf','c','你好',NA,NULL,NaN,'NA','NULL','NaN')
+
+#Clean part:
 
 y_t=as.numeric(y_t)
 t=as.numeric(t)
@@ -41,25 +46,16 @@ t=as.numeric(t)
 clean_up=toupper(y_t)
 clean_down=tolower(y_t)
 
-clean_index=which(clean_up==clean_down & y_t>=0)
+clean_index=which(clean_up==clean_down & y_t>=0 & !is.na(y_t) & y_t<Inf)
+
 y_t=y_t[clean_index]
 t=t[clean_index]
 
 y_t=as.numeric(y_t)
 t=as.numeric(t)
 
-plot(y_t~t)
-
-clean_index=c()
-
-for(i in 1:length(y_t)){
-  test=y_t[i]
-  if(!is.na(test)){
-    if(0<=test & test<Inf){
-      clean_index=c(clean_index,i)
-    }
-  }
-}
+#Plot the y_t if you want
+#plot(y_t~t)
 
 #Two special situations:
 
@@ -104,4 +100,44 @@ for(i in 11:m-1){
 }
 plot(Diffy_t)
 DiffPoint
+
+LR<-function(X,Y){
+  clean = !is.na(Y) 
+  Y = as.numeric(Y[clean]);
+  X = as.numeric(X[clean])
+  n=length(Y)
+  Xmean=mean(X)
+  Ymean=mean(Y)
+  B=sum((X-Xmean)*(Y-Ymean))/sum((X-Xmean)^2)
+  A=Ymean-B*Xmean
+  FitY=A+B*X
+  SST=sum((Y-Ymean)^2)
+  SSR=sum((Y-FitY)^2)
+  rsquare=1-SSR/SST
+  return(c(B,A,rsquare))
+}
+
+#For the final piece of section, do the following calculation:
+#piece=0
+
+Halfy_t=y_t[round((n+piece)/2):n]
+Halft=t[round((n+piece)/2):n]
+
+HalfOUTPUT=LR(Halft,Halfy_t)
+
+Wholey_t=y_t[piece:n]
+Wholet=t[piece:n]
+
+WholeOUTPUT=LR(Wholet,Wholey_t)
+
+if(WholeOUTPUT[3]>HalfOUTPUT[3]){
+  OUTPUT=WholeOUTPUT
+}else{OUTPUT=HalfOUTPUT}
+
+FinalSlope=OUTPUT[1]
+FinalIntercept=OUTPUT[2]
+
+deadtime=(maxcap-FinalIntercept)/FinalSlope-2
+deadtime
+
 

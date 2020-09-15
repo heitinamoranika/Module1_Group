@@ -6,7 +6,6 @@ Capacity_Deadtime<-function(y_t,t,maxcap){
   
   y_t=as.numeric(y_t)
   t=as.numeric(t)
-
   
   clean_up=toupper(y_t)
   clean_down=tolower(y_t)
@@ -21,19 +20,20 @@ Capacity_Deadtime<-function(y_t,t,maxcap){
   
   #Plot the y_t if you want
   #plot(y_t~t)
+  #Calculate the max of y_t, max of t and length of data
   Maxy_t=max(y_t)
   EndTime=max(t)
   n=length(y_t)
   
   #Two special situations:
   #If the valid data length is less than 1, just give an alarm at the end of t, we regard the system is broken and nothing is recorded.
-  #If the y_t in the end of time is larger than 98% of maxcap, just give an alarm at the end of t, we regard the system will broken soon.
+  #If the y_t in the end of time is larger than 98% of maxcap, just give an alarm at the end of t, we regard the system will break soon.
   
   if(n<=1){
     return(EndTime)
   }
   if(n>12){
-    if(mean(y_t[min((n-20),n):n])>0.95*maxcap){
+    if(mean(y_t[min((n-5),n):n])>0.98*maxcap){
       return(EndTime)
     }
   }
@@ -44,7 +44,6 @@ Capacity_Deadtime<-function(y_t,t,maxcap){
     clean = !is.na(Y) 
     Y = as.numeric(Y[clean]);
     X = as.numeric(X[clean])
-    n=length(Y)
     Xmean=mean(X)
     Ymean=mean(Y)
     B=sum((X-Xmean)*(Y-Ymean))/sum((X-Xmean)^2)
@@ -52,34 +51,43 @@ Capacity_Deadtime<-function(y_t,t,maxcap){
     return(c(B,A))
   }
   
-  if(n<80){
+  #If the valid point in our data is less than 20, it may not good to do advanced method to our data, we choose the simple linear regression.
+  #We hold that the slope of our data should be positive or the y_t will never reach maxcap. So if the function found that the slope is non-positive, it will return the max(t) derectly.
+
+  if(n<20){
     Result=LR(t,y_t)
     FinalSlope=Result[1]
     FinalIntercept=Result[2]
     if(FinalSlope>0){
       deadtime=(maxcap-FinalIntercept)/FinalSlope-2
       OUTPUT=max(deadtime,EndTime)
+    }else{
+      OUTPUT=EndTime
     }
   }else{
-    
+    #If our data is large enough for advanced method, use the following part.
     #The following loop is to find great jump of data, great jump is t when y_t drop from high level to low level.
-    #There is no perfect rule to find great jump, any rule will meet exceptions, therefore great jump is an assist in our algorithm
+    #There is no perfect rule to find great jump, any rule will meet exceptions, therefore great jump is just an assist in our algorithm.
     
     GreatJump=c()
     Diffy_t=diff(y_t)
     m=length(Diffy_t)
     
+    #DetectJumpDown will find y_t jump from high level to low level. DetectJumpUp will find y_t jump from low level to high level. 
+    #In our function we will only use DetectJumpDown, the DetectJumpUp is for further development if you want. 
+    
     DetectJumpDown<-function(ind){
-      ForEight<-y_t[max(ind-8,1):ind]
-      BackEight<-y_t[(ind+1):min(m,ind+8)]
+      ForEight<-y_t[max(ind-5,1):ind]
+      BackEight<-y_t[(ind+1):min(m,ind+5)]
       if(Diffy_t[ind]<0 & min(ForEight)>max(BackEight) & max(0.8*abs(Diffy_t[ind]),0.3*Maxy_t)<(mean(ForEight)-mean(BackEight))){
         return(ind)
       }
       return(NA)
     }
+    
     DetectJumpUp<-function(ind){
-      ForEight<-y_t[max(ind-8,1):ind]
-      BackEight<-y_t[(ind+1):min(m,ind+8)]
+      ForEight<-y_t[max(ind-5,1):ind]
+      BackEight<-y_t[(ind+1):min(m,ind+5)]
       if(Diffy_t[ind]>0 & max(ForEight)<min(BackEight) & max(0.8*abs(Diffy_t[ind]),0.3*Maxy_t)<(-mean(ForEight)+mean(BackEight))){
         return(ind)
       }
@@ -87,75 +95,112 @@ Capacity_Deadtime<-function(y_t,t,maxcap){
     }
     
     
-    detectret<-sapply(11:(m-11), FUN = DetectJumpDown)
+    detectret<-sapply(6:(m-6), FUN = DetectJumpDown)
     GreatJump<-detectret[!is.na(detectret)]
     
+    #If you want to check GreatJump from our function, please run the following function:
     #plot(Diffy_t)
     #GreatJump
     #plot(y_t)
     #As we said before, subsection cut by great jump is only an assist for our prediction. In case that cutting by great jump will make our data piece too small. We run the following code:
-    #We will check the length of every piece of data cutted by great jump point from the end, if the length is less than 30, we will ignore this cut. 
+    #We will check the length of every piece of data cutted by great jump point from the end, if the length is less than 20, we will ignore this cut. 
+    #Any satisfactory great jump will be included into FinalCut.
     
-    n=length(y_t)
     FinalCut=c(n)
     GreatJump=c(1,GreatJump)
     
     while(length(GreatJump)>0){
       lenJump=length(GreatJump)
-      if(FinalCut[1]-GreatJump[lenJump]>=80){
+      if(FinalCut[1]-GreatJump[lenJump]>=20){
         FinalCut=c(GreatJump[lenJump],FinalCut)
         GreatJump=GreatJump[-lenJump]
         n=FinalCut[1]
      }else{
         GreatJump=GreatJump[-lenJump]
      }
-    } 
-    #For any section cutted by FinalCut, do the linear regression 1/3 part from the end, 2/3 part from the end and the whole data, this is for exp and log shape data. 
-    #We will consider R square from the three linear regression and choose the best one. 
-    #We regard the slope must be positive.
+    }
     
-    right=length(FinalCut)
-    Index=FinalCut[right-1]:FinalCut[right]
-    
-    Y=y_t[Index]
-    X=t[Index]
-    n=length(Y)
-    n1=round(1*n/4)
-    n2=round(n/2)
-    n3=round(3*n/4)
-    Result3=LR(X[n3:n],Y[n3:n])
-    Result2=LR(X[n2:n],Y[n2:n])
-    Slope=c(Result3[1],Result2[1])
-    Intercept=c(Result3[2],Result2[2])
-    if(max(Slope)>0){
-      index=which(Slope>0 & Slope<Inf)
-      Intercept=Intercept[index]
-      Slope=Slope[index]
-      deadtime=(maxcap-Intercept)/Slope-2
-      Finalindex=which.min(deadtime)
-      FinalSlope=Slope[Finalindex]
-      FinalIntercept=Intercept[Finalindex]
-      OUTPUT=max(min(deadtime),EndTime)
+    if(FinalCut[1]<=20){
+      FinalCut[1]=1
     }else{
-      Result1=LR(X[n1:n],Y[n1:n])
-      Result0=LR(X,Y)
-      Slope=c(Result1[1],Result0[1])
-      Intercept=c(Result1[2],Result0[2])
+      FinalCut=c(1,FinalCut)
+    }
+    
+    #For any section cutted by FinalCut, do the linear regression. We will quartering our data, and do linear regression [3/4,1], [2/4,1] or if necessary [1/4,1] and the whole data. This design is for exp and log shape data. 
+    #We will consider linear regression results from the two or four linear regression and choose the largest slope one. 
+    #The reason we choose the largest slope is that we want a conservative estimation of deadtime, any deadtime larger than the real deadtime will be very dangerous.
+    #We regard the slope must be positive, if all slope is non-positive, take the max(t).
+    
+    #PartLinearRegression is just cut the whole data into [3/4,1], [2/4,1], [1/4,1] and [0,1] of the whole data. 
+    #First do the linear regression on [3/4,1], [2/4,1], if there is positive slope, choose the larger one. 
+    #If the two slopes before are both negative, choose the larger one from [1/4,1] and [0,1] of the whole data. 
+    
+    PartLinearRegression<-function(t,y_t,index){
+      Y=y_t[Index]
+      X=t[Index]
+      n=length(Y)
+      n1=round(1*n/4)
+      n2=round(n/2)
+      n3=round(3*n/4)
+      Result3=LR(X[n3:n],Y[n3:n])
+      Result2=LR(X[n2:n],Y[n2:n])
+      Slope=c(Result3[1],Result2[1])
       if(max(Slope)>0){
         index=which(Slope>0 & Slope<Inf)
-        Intercept=Intercept[index]
         Slope=Slope[index]
-        deadtime=(maxcap-Intercept)/Slope-2
-        Finalindex=which.min(deadtime)
-        FinalSlope=Slope[Finalindex]
-        FinalIntercept=Intercept[Finalindex]
-        OUTPUT=max(min(deadtime),EndTime)
-      }else{OUTPUT=EndTime}
+        return(max(Slope))
+      }else{
+        Result1=LR(X[n1:n],Y[n1:n])
+        Result0=LR(X,Y)
+        Slope=c(Result1[1],Result0[1])
+        index=which(Slope>0 & Slope<Inf)
+        Slope=Slope[index]
+        return(max(Slope))
+        }
     }
+    
+    #The following loop do every PartLinearRegression on each section cutted by FinalCut from the end to start point. 
+    #If there exists positive slope of the section from the end, then the loop will break, or it will return the first positive slope it found and break
+    
+    lenCut=length(FinalCut)
+    
+    for(i in lenCut:2){
+      Index=FinalCut[i-1]:FinalCut[i]
+      Slope=PartLinearRegression(t,y_t,Index)
+      if(Slope>0){
+        FinalSlope=Slope
+        break
+      }else{
+        FinalSlope=0
+      }
+    }
+    
+    #Different with the professor's example, after finding the slope we want to use, we will find what level y_t end is (Endy_t). And the time y_t reach the maxcap will be calcualted by Endy_t Endt and FinalSlope.
+    #If the FinalSlope is non-positive, just return the max(t)
+    
+    n=length(y_t)
+    EndIndex=n
+    Endy_t=y_t[EndIndex]
+    Endt=t[EndIndex]
+    for(i in (n-1):min(n,max(n-10,1))){
+      if(y_t[i]>Endy_t){
+        EndIndex=i
+        Endy_t=y_t[EndIndex]
+        Endt=t[EndIndex]
+      }
+    }
+    if(FinalSlope>0){
+      OUTPUT=(maxcap-Endy_t)/FinalSlope+Endt-2
+    }else{
+      OUTPUT=EndTime
+    }
+    FinalIntercept=Endy_t-Endt*FinalSlope
+      
   }  
   #If you want to see how our function fit the data. Run the following code:
-  plot(y_t~t)
-  abline(FinalIntercept, FinalSlope,col="red")
+  #But it is time-consuming
+  #plot(y_t~t)
+  #abline(FinalIntercept, FinalSlope,col="red")
   return(OUTPUT)
 }
 
@@ -183,8 +228,6 @@ abline(h = maxcap,col="red",lwd=2)
 box_data_y_t=box_data$y_t
 box_data_t=box_data$t
 
-y_t=box_data_y_t
-t=box_data_t
 
 #Test
 

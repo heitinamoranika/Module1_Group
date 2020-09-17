@@ -40,7 +40,7 @@ your_function<-function(y_t,t,maxcap){
     return(EndTime+1)
   }
   if(n>12){
-    if(mean(y_t[(n-5):n])>0.98*maxcap){
+    if(mean(y_t[min((n-5),n):n])>0.98*maxcap){
       return(EndTime+1)
     }
   }
@@ -79,7 +79,8 @@ your_function<-function(y_t,t,maxcap){
     
     GreatJump=c()
     Diffy_t=diff(y_t)
-    m=n-1
+    m=length(Diffy_t)
+    n=length(y_t)
     #DetectJumpDown will find y_t jumping from high level to low level sharply. DetectJumpUp will find y_t jumping from low level to high level sharply. 
     #In our function we will only use DetectJumpDown, the DetectJumpUp is for further development if you want. 
     #The rule of great jump is very strict, or some outliers will become great jump
@@ -184,13 +185,15 @@ your_function<-function(y_t,t,maxcap){
     lenCut=length(FinalCut)
     for(i in lenCut:2){
       Index=FinalCut[i-1]:FinalCut[i]
-      FinalSlope=PartLinearRegression(t,y_t,Index)
-      if(FinalSlope>0){
-        break
-      }else{
-        FinalSlope=0
+      #Short section is omitted, in fact many short section is cleaned above
+      if(length(Index)>15){
+        FinalSlope=PartLinearRegression(t,y_t,Index)
+        if(FinalSlope>0){
+          break
+        }else{
+          FinalSlope=0
+        }
       }
-      
     }
     #The FinalSlope is just we want.
     #For most of situations, the loop will break when i=lenCut, so we do not worry about the running time blow up if there is no special data. 
@@ -238,193 +241,9 @@ your_function<-function(y_t,t,maxcap){
   #ExampleSlope=ExampleOutput[2]
   #ExampleIntercept=ExampleOutput[3]
   
-  plot(y_t~t,xlim=c(0,1.5*EndTime),ylim=c(0,maxcap*1.1))
-  abline(FinalIntercept, FinalSlope,col="red")
+  #plot(y_t~t,xlim=c(0,1.5*EndTime),ylim=c(0,maxcap*1.1))
+  #abline(FinalIntercept, FinalSlope,col="red")
   #abline(ExampleIntercept, ExampleSlope,col="orange")
-  abline(h = maxcap,col="blue",lwd=2)
+  #abline(h = maxcap,col="blue",lwd=2)
   return(OUTPUT)
 }
-
-Example_function<-function(y_t,t,maxcap){
-  y_t=as.numeric(y_t)
-  t=as.numeric(t)
-  Clean=which(toupper(y_t)==tolower(y_t)& y_t<Inf & y_t>0)
-  y_t=y_t[Clean]
-  t=t[Clean]
-  y_t=as.numeric(y_t)
-  t=as.numeric(t)
-  OUTPUT=lm(y_t~t)
-  Slope=OUTPUT$coefficients[2]
-  Intercept=OUTPUT$coefficients[1]
-  deadline=(maxcap-Slope)/Intercept-2
-  return(deadline)
-}
-
-
-#Example 1
-maxcap = 100*10^3;
-out_data = read.csv("out_youtube.csv",header=TRUE)
-plot(out_data$t,out_data$y_t,ylim=c(0,maxcap),xlim=c(0,1600),
-     ylab="Youtube Traffic (Kb)",xlab="Time (sec)",main="Youtube Traffic Data")
-abline(h = maxcap,col="red",lwd=2)
-
-out_data_y_t=out_data$y_t
-out_data_t=out_data$t
-
-
-#Example 2
-maxcap=100
-box_data = read.csv("out_box.csv",header=TRUE)
-plot(box_data$t,box_data$y_t,ylim=c(-10,maxcap),xlim=c(0,400),
-     ylab="Box Traffic (kb) ",xlab="Time (sec)",main="Box Traffic Data")
-abline(h = maxcap,col="red",lwd=2)
-
-box_data_y_t=box_data$y_t
-box_data_t=box_data$t
-
-
-#Test
-
-n=500
-test_t=1:n
-Error=c('1',1,'-1',-1,Inf,'Inf','c','你好',NA,NaN,'NA','NULL','NaN')
-
-#Example 3
-test_y_t1=rep(0,n)
-m=round(n/5)
-test_y_t1[1:m]=3*test_t[1:m]+rnorm(m, mean=0, sd=70)
-test_y_t1[(m+1):(2*m)]=test_t[1:m]+1000+rnorm(m, mean=0, sd=70)
-test_y_t1[(2*m+1):(3*m)]=6*test_t[1:m]+2000+rnorm(m, mean=0, sd=70)
-test_y_t1[(3*m+1):(n-30)]=10*test_t[1:m]+3000+rnorm(m, mean=0, sd=70)
-test_y_t1[(n-30):n]=test_t[1:m]+rnorm(m, mean=0, sd=70)
-test_y_t1[round(0.5*n):(round(0.5*n)+30)]=0
-test_y_t1[round(0.7*n):(round(0.7*n)+5)]=100
-test_y_t1[sample(1:n, 13)]=Error
-plot(test_y_t1~test_t)
-
-#Example 4
-test_y_t2=rep(0,n)
-m=round(n/3)
-test_y_t2[1:m]=3*test_t[1:m]-50+rnorm(m, mean=0, sd=70)
-test_y_t2[(m+1):(2*m+1)]=4*test_t[1:m]-50+rnorm(m, mean=0, sd=70)
-test_y_t2[(2*m+2):n]=10*test_t[1:m]-50+rnorm(m, mean=0, sd=70)
-test_y_t2[round(0.5*n):(round(0.5*n)+30)]=0
-test_y_t2[round(0.7*n):(round(0.7*n)+5)]=100
-test_y_t2[sample(1:n, 13)]=Error
-plot(test_y_t2~test_t)
-
-#Example 5
-test_y_t3=rep(0,n)
-m=round(n/3)
-test_y_t3[1:m]=10*test_t[1:m]-50+rnorm(m, mean=0, sd=70)
-test_y_t3[(m+1):(2*m+1)]=5*test_t[1:m]-50+rnorm(m, mean=0, sd=70)
-test_y_t3[(2*m+2):n]=1*test_t[1:m]-50+rnorm(m, mean=0, sd=70)
-test_y_t3[sample(1:n, 13)]=Error
-test_y_t3[round(0.5*n):(round(0.5*n)+30)]=0
-test_y_t3[round(0.7*n):(round(0.7*n)+5)]=100
-plot(test_y_t3~test_t)
-
-#Example 6
-m=round(4*n/5)
-test_y_t4=rep(0,n)
-test_y_t4[1:m]=rnorm(m, mean=100, sd=70)
-test_y_t4[(m+1):n]=10*test_t[1:(n-m)]+rnorm(n-m, mean=0, sd=70)
-test_y_t4[sample(1:n, 13)]=Error
-test_y_t4[round(0.5*n):(round(0.5*n)+30)]=0
-test_y_t4[round(0.7*n):(round(0.7*n)+5)]=100
-plot(test_y_t4~test_t)
-
-#Example 7
-test_y_t5=100*log(test_t)+rnorm(n, mean=100, sd=70)
-test_y_t5[sample(1:n, 13)]=Error
-test_y_t5[round(0.5*n):(round(0.5*n)+30)]=0
-test_y_t5[round(0.7*n):(round(0.7*n)+5)]=3
-plot(test_y_t5~test_t)
-
-
-#Example 8
-test_y_t6=rep(0,n)
-m=round(n/5)
-test_y_t6[1:m]=3*test_t[1:m]+rnorm(m, mean=0, sd=70)
-test_y_t6[(m+1):(2*m)]=test_t[1:m]+1000+rnorm(m, mean=0, sd=70)
-test_y_t6[(2*m+1):(3*m)]=6*test_t[1:m]+2000+rnorm(m, mean=0, sd=70)
-test_y_t6[(3*m+1):(4*m)]=10*test_t[1:m]+3000+rnorm(m, mean=0, sd=70)
-test_y_t6[(4*m+1):(5*m)]=test_t[1:m]+rnorm(m, mean=0, sd=70)
-test_y_t6[round(0.5*n):(round(0.5*n)+30)]=0
-test_y_t6[round(0.7*n):(round(0.7*n)+5)]=100
-test_y_t6[sample(1:n, 13)]=Error
-plot(test_y_t6~test_t)
-
-par(mfrow = c(2, 4))
-
-your_function(out_data_y_t,out_data_t,100*10^3)
-your_function(box_data_y_t,box_data_t,100)
-your_function(test_y_t1,test_t,5000)
-your_function(test_y_t2,test_t,2000)
-your_function(test_y_t3,test_t,2000)
-your_function(test_y_t4,test_t,1500)
-your_function(test_y_t5,test_t,1000)
-your_function(test_y_t6,test_t,5000)
-
-##### What We'll Run for Grading #####
-# The example data for y_t and t will change.
-
-### Robustness/Error Tolerance ###
-maxcap = 10; y_t = c(1:3,rep(NA,7)); t = 1:10; 
-tryCatch(your_function(y_t,t,maxcap),error=function(e) "error")
-maxcap = 10; y_t = c(1:3,sample(c(rep("a",5),rep(NA,5)),7)); t = 1:10; 
-tryCatch(your_function(y_t,t,maxcap),error=function(e) "error")
-# and other examples.
-
-### Accuracy ###
-maxcap = 15; y_t = 1:10; t = 1:10; trueTime = 14
-# some loss function l(your_function(y_t,t,maxcap),trueTime)
-# square-error loss:
-(your_function(y_t,t,maxcap) - trueTime)^2
-# non-symmetric square-error loss:
-if(trueTime >= your_function(y_t,t,maxcap)) {
-  (trueTime - your_function(y_t,t,maxcap))^2
-} else {
-  Inf
-}  
-
-### Speed ###
-maxcap=2*10^5
-y_t = 1:(10^5);  y_t[sample(1:10^5,10)] = NA; y_t[sample(1:10^5,10)] = 0; 
-t = 1:(10^5);
-
-codetime = rep(0,10)
-Examplecodetime = rep(0,10)
-for(i in 1:10) {
-  start=Sys.time()
-  output = your_function(y_t,t,maxcap) 
-  end=Sys.time()
-  codetime[i] = as.numeric(end-start)
-  start=Sys.time()
-  output = Example_function(y_t,t,maxcap) 
-  end=Sys.time()
-  Examplecodetime[i] = as.numeric(end-start)
-  
-}
-mean(codetime)
-0.1178642
-mean(Examplecodetime)
-0.2083678
-
-#0.96s
-### Scalability  ###
-codetime = 1:6; maxcap = 10^7; Exampletime = 1:6
-for(i in 1:6) {
-  start=Sys.time()
-  y_t = 1:(10^i); t = 1:(10^i);
-  output = your_function(y_t,t,maxcap) 
-  end=Sys.time()
-  codetime[i] = as.numeric(end-start)
-  start=Sys.time()
-  y_t = 1:(10^i); t = 1:(10^i);
-  output = Example_function(y_t,t,maxcap) 
-  end=Sys.time()
-  Exampletime[i] = as.numeric(end-start)
-}
-plot(1:6,log(codetime,10),pch = 15,col='red')
-points(1:6,log(Exampletime,10),pch = 15,col='orange')

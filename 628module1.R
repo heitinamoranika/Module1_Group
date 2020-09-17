@@ -7,12 +7,13 @@
 #In our function, we regard as the estimated slope must be positive (Or the y_t may never reach maxcap)
 #Our function prefers to give a conservative and strict prediction.
 #There is many parameters in our data, as mentioned by professor, there is no perfect algorithm, in fact we highly recomment if for further development, you can change any parameter you want to fit your data.
+#There may some warning from our function when cleanning data. Just miss them. 
 
 your_function<-function(y_t,t,maxcap){
   
   #Clean part:
   #Any clean part of function must pass the following example:
-  #y_t=c('1',1,'-1',-1,Inf,'Inf','c','你好',NA,NULL,NaN,'NA','NULL','NaN')
+  #y_t=c('1',1,'-1',-1,Inf,'Inf','c',NA,NULL,NaN,'NA','NULL','NaN')
   
   y_t=as.numeric(y_t)
   t=as.numeric(t)
@@ -74,7 +75,7 @@ your_function<-function(y_t,t,maxcap){
     }
   }else{
     #If our data is large enough for advanced method, use the following part.
-    #The following loop is to find great jump of data, great jump is t when y_t drop from high level to low level sharply.
+    #The following loop is to find great jump of data, great jump is index where y_t drop from high level to low level sharply.
     #There is no perfect rule to find great jump, any rule will meet exceptions, therefore great jump is just an assist in our algorithm.
     
     GreatJump=c()
@@ -84,7 +85,9 @@ your_function<-function(y_t,t,maxcap){
     #In our function we will only use DetectJumpDown, the DetectJumpUp is for further development if you want. 
     #The rule of great jump is very strict, or some outliers will become great jump
     #The great jump is the method we design to deal with server down period, server maintenance period and server clean time. We ignore the DetectJumpUp because 1. It may belongs to valid data and contains some information we want; 2. Our following function can handle this kind of problem. 
+    
     DetectJumpDown<-function(ind){
+      #Two level of filter, one coarse and one fine filter, this will help this loop run very fast. 
       if(-Diffy_t[ind]>0.4*y_t[ind]){
         ForFive<-y_t[max(ind-5,1):ind]
         BackFive<-y_t[(ind+1):min(m,ind+5)]
@@ -106,8 +109,8 @@ your_function<-function(y_t,t,maxcap){
       return(NA)
     }
     
-    #i when great jump happen will be saved in GreatJump
-    detectret<-sapply(6:(m-6), FUN = DetectJumpDown)
+    #i where great jump happen will be saved in GreatJump
+    detectret<-sapply(7:(m-7), FUN = DetectJumpDown)
     GreatJump<-detectret[!is.na(detectret)]
     
     #If you want to check GreatJump from our function, please run the following function:
@@ -138,11 +141,12 @@ your_function<-function(y_t,t,maxcap){
       FinalCut=c(1,FinalCut)
     }
     
+    #In the following section we defind a function called PartLinearRegression.
     #For any long section (>30) cutted by FinalCut, do the linear regression. We will cut any section into 4 equal part, and do linear regression [1/2,3/4], [3/4,1] first then choose the largest slope. If the slope is negative, use the [0,1/4], [1/4,1/2] then choose the largest slope.
-    #This design is for exponential shape data or there is a decrease in our data.
-    #As you can see, there is only a part of data from the end enter into linear regression calculation, therefore we do not need to worry about the great increasing caused by server maintenance period.
+    #This design is for exponential shape data or there is a piece of decreasing in our data.
+    #As you can see, there is only a part of data from the end enter into linear regression calculation one by one, therefore we do not need to worry about the great increasing caused by server maintenance period.
     #The reason we choose the largest slope is that we want a conservative estimation of deadtime, any deadtime larger than the real deadtime will be very dangerous.
-    #The work above is just PartLinearRegression does
+    #The work above is just PartLinearRegression does.
     
     PartLinearRegression<-function(t,y_t,index){
       #If the section is short, just do the linear regression, there is no need to do advanced method.
@@ -155,12 +159,14 @@ your_function<-function(y_t,t,maxcap){
         Y=y_t[Index]
         X=t[Index]
         n=length(Y)
+        #Data Cut
         n1=round(1*n/4)
         n2=round(n/2)
         n3=round(3*n/4)
         Result3=LR(X[n3:n],Y[n3:n])
         Result2=LR(X[n2:n3],Y[n2:n3])
         Slope=c(Result3[1],Result2[1])
+        #Choose the positive slope or return 0
         if(max(Slope)>0){
           index=which(Slope>0 & Slope<Inf)
           Slope=Slope[index]
@@ -178,9 +184,11 @@ your_function<-function(y_t,t,maxcap){
       }
     }
     #It seems that this part contains many times of linear regression, but for most of situations, function will return output in the first if...else. 
+    
     #The following loop do every PartLinearRegression on each section cutted by FinalCut from the end to start point. 
     #If there exists positive slope of the section from the end, then the loop will break, or it will return the first positive slope it found and break
     #No positive slope, the loop will return 0.
+    
     lenCut=length(FinalCut)
     for(i in lenCut:2){
       Index=FinalCut[i-1]:FinalCut[i]
@@ -193,15 +201,16 @@ your_function<-function(y_t,t,maxcap){
       
     }
     #The FinalSlope is just we want.
-    #For most of situations, the loop will break when i=lenCut, so we do not worry about the running time blow up if there is no special data. 
+    #For most of situations, the loop will break when i=lenCut, so we do not worry about the running time blow up unless there is special data. 
     #Different with the professor's example, after finding the slope we want, we will not use its corresponding intercept to calculate. 
     #Instead, we will use the y_t and t in the end of data to calculate the line, which avoid that the y_t is in low level at the end of time
     #It is not a good idea to calculate the mean of y_t at the end directly, in case there exist some NA among the last five elements.
     #The output will be the max of the five.
     #If the FinalSlope is non-positive, just return the end of time.
+    
     n=length(y_t)
-    Endt=t[(n-1):min(n,max(n-5,1))]
-    Endy_t=y_t[(n-1):min(n,max(n-5,1))]
+    Endt=t[n:min(n,max(n-5,1))]
+    Endy_t=y_t[n:min(n,max(n-5,1))]
     
     if(FinalSlope>0){
       OUTPUT=(maxcap-Endy_t)/FinalSlope+Endt-2
@@ -238,10 +247,10 @@ your_function<-function(y_t,t,maxcap){
   #ExampleSlope=ExampleOutput[2]
   #ExampleIntercept=ExampleOutput[3]
   
-  plot(y_t~t,xlim=c(0,1.5*EndTime),ylim=c(0,maxcap*1.1))
-  abline(FinalIntercept, FinalSlope,col="red")
+  #plot(y_t~t,xlim=c(0,1.5*EndTime),ylim=c(0,maxcap*1.1))
+  #abline(FinalIntercept, FinalSlope,col="red")
   #abline(ExampleIntercept, ExampleSlope,col="orange")
-  abline(h = maxcap,col="blue",lwd=2)
+  #abline(h = maxcap,col="blue",lwd=2)
   return(OUTPUT)
 }
 
@@ -400,10 +409,10 @@ for(i in 1:10) {
   output = your_function(y_t,t,maxcap) 
   end=Sys.time()
   codetime[i] = as.numeric(end-start)
-  start=Sys.time()
-  output = Example_function(y_t,t,maxcap) 
-  end=Sys.time()
-  Examplecodetime[i] = as.numeric(end-start)
+  #start=Sys.time()
+  #output = Example_function(y_t,t,maxcap) 
+  #end=Sys.time()
+  #Examplecodetime[i] = as.numeric(end-start)
   
 }
 mean(codetime)

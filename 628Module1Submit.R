@@ -69,7 +69,7 @@ your_function<-function(y_t,t,maxcap){
     FinalIntercept=Result[2]
     if(FinalSlope>0){
       deadtime=(maxcap-FinalIntercept)/FinalSlope-2
-      OUTPUT=max(deadtime,EndTime)
+      OUTPUT=max(deadtime,EndTime+1)
     }else{
       OUTPUT=EndTime+1
     }
@@ -81,6 +81,7 @@ your_function<-function(y_t,t,maxcap){
     GreatJump=c()
     Diffy_t=diff(y_t)
     m=n-1
+    
     #DetectJumpDown will find y_t jumping from high level to low level sharply. DetectJumpUp will find y_t jumping from low level to high level sharply. 
     #In our function we will only use DetectJumpDown, the DetectJumpUp is for further development if you want. 
     #The rule of great jump is very strict, or some outliers will become great jump
@@ -142,10 +143,10 @@ your_function<-function(y_t,t,maxcap){
     }
     
     #In the following section we defind a function called PartLinearRegression.
-    #For any long section (>30) cutted by FinalCut, do the linear regression. We will cut any section into 4 equal part, and do linear regression [1/2,3/4], [3/4,1] first then choose the largest slope. If the slope is negative, use the [0,1/4], [1/4,1/2] then choose the largest slope.
+    #For any long section (>30) cutted by FinalCut, we will cut any section into 4 equal part, and do linear regression [1/2,3/4], [3/4,1] first then choose the largest slope. If the slope is negative, use the [0,1/4], [1/4,1/2] then choose the largest slope.
     #This design is for exponential shape data or there is a piece of decreasing in our data.
     #As you can see, there is only a part of data from the end enter into linear regression calculation one by one, therefore we do not need to worry about the great increasing caused by server maintenance period.
-    #The reason we choose the largest slope is that we want a conservative estimation of deadtime, any deadtime larger than the real deadtime will be very dangerous.
+    #The reason we choose the largest slope is that we want a conservative estimation of deadtime, any deadline larger than the real deadline will be very dangerous.
     #The work above is just PartLinearRegression does.
     
     PartLinearRegression<-function(t,y_t,index){
@@ -183,7 +184,7 @@ your_function<-function(y_t,t,maxcap){
         }
       }
     }
-    #It seems that this part contains many times of linear regression, but for most of situations, function will return output in the first if...else. 
+    #It seems that this part contains many times of linear regression, but for most of situations, function will return output in the first two linear regression. 
     
     #The following loop do every PartLinearRegression on each section cutted by FinalCut from the end to start point. 
     #If there exists positive slope of the section from the end, then the loop will break, or it will return the first positive slope it found and break
@@ -198,14 +199,14 @@ your_function<-function(y_t,t,maxcap){
       }else{
         FinalSlope=0
       }
-      
     }
+    
     #The FinalSlope is just we want.
     #For most of situations, the loop will break when i=lenCut, so we do not worry about the running time blow up unless there is special data. 
     #Different with the professor's example, after finding the slope we want, we will not use its corresponding intercept to calculate. 
     #Instead, we will use the y_t and t in the end of data to calculate the line, which avoid that the y_t is in low level at the end of time
     #It is not a good idea to calculate the mean of y_t at the end directly, in case there exist some NA among the last five elements.
-    #The output will be the max of the five.
+    #The output will be the min of the five.
     #If the FinalSlope is non-positive, just return the end of time.
     
     n=length(y_t)
@@ -222,11 +223,12 @@ your_function<-function(y_t,t,maxcap){
       OUTPUT=EndTime+1
     }
     #As we mentioned before, this intercept is not slope's corresponding intercept.
+    #The fitting line will start from the end of data. 
     #If you do not want to plot, just omit this line.
     FinalIntercept=Endy_t-Endt*FinalSlope
     
   }  
-  #If you want to see how our function fit the data, our prof's example function fit the data. Run the following code:
+  #If you want to see how our function fit the data, how our prof's example function fit the data. Run the following code:
   #But it is time-consuming for ploting
   
   #Example_function<-function(y_t,t,maxcap){
@@ -248,8 +250,8 @@ your_function<-function(y_t,t,maxcap){
   #ExampleIntercept=ExampleOutput[3]
   
   #plot(y_t~t,xlim=c(0,1.5*EndTime),ylim=c(0,maxcap*1.1))
-  #abline(FinalIntercept, FinalSlope,col="red")
-  #abline(ExampleIntercept, ExampleSlope,col="orange")
-  #abline(h = maxcap,col="blue",lwd=2)
-  return(OUTPUT)
+  #abline(FinalIntercept, FinalSlope,col="red",lwd=3)
+  #abline(ExampleIntercept, ExampleSlope,col="green",lwd=3)
+  #abline(h = maxcap,col="blue",lwd=3)
+  return(round(OUTPUT))
 }
